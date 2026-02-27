@@ -8,6 +8,7 @@ class Project(Base):
     slug = Column(String, unique=True, index=True, nullable=False)
     title = Column(String, nullable=True)
     description = Column(String, nullable=True)
+    content = Column(String, nullable=True)
     cover_image_url = Column(String, nullable=True)
     repo_url = Column(String, nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
