@@ -7,4 +7,4 @@ class Tag(Base):
     id = Column(Integer, primary_key=True, index=True)
     slug = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, unique=True, nullable=False)
-    project = relationship("Project", secondary="project_tag", back_populates="tag")
+    projects = relationship("Project", secondary="project_tag", back_populates="tags")

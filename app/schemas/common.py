@@ -8,7 +8,7 @@ T = TypeVar("T")
 
 class APIResponse(GenericModel, Generic[T]):
     data: T
-    meta: Optional[PaginationMeta]
+    meta: Optional[PaginationMeta] = None
     message: str = "Success"
 
 class PaginationMeta(BaseModel):

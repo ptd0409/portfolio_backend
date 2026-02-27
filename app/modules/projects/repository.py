@@ -3,9 +3,12 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from sqlalchemy import Select, desc, func, or_, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.models.project import Project
+from app.schemas.project import ProjectCreate, ProjectUpdate
 
 async def list_projects(
         db: AsyncSession,
@@ -19,7 +22,7 @@ async def list_projects(
         - items: list[Project]
         - total: total rows for pagination
     """
-    stmt: Select = select(Project)
+    stmt: Select = select(Project).options(selectinload(Project.tags))
 
     if q:
         pattern = f"%{q.strip()}%"
@@ -50,3 +53,37 @@ async def list_projects(
 
     rows: Sequence[Project] = (await db.execute(stmt)).scalars().all()
     return list(rows), int(total)
+
+async def get_project_by_slug(
+    db: AsyncSession,
+    *,
+    slug: str
+) -> Optional[Project]:
+    stmt = (
+        select(Project).where(Project.slug == slug).options(selectinload(Project.tags))
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+async def create_project(
+    db: AsyncSession,
+    *,
+    payload: ProjectCreate
+) -> ProjectCreate:
+    project = Project(
+        slug=payload.slug.strip(),
+        title=payload.title,
+        description=payload.description,
+        content=payload.content,
+        cover_image_url=payload.cover_image_url,
+        repo_url=payload.repo_url,
+        published_at=payload.published_at
+    )
+
+    db.add(project)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise
+    await db.refresh(project)
+    return project

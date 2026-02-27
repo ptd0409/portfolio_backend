@@ -14,4 +14,4 @@ class Project(Base):
     published_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, onupdate=func.now())
-    tags = relationship("Tag", secondary="project_tag", back_populates="project")
+    tags = relationship("Tag", secondary="project_tag", back_populates="projects")
