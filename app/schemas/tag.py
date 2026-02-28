@@ -7,6 +7,17 @@ class TagRead(BaseModel):
     id: int
     slug: str
     name: str
-    project: list[ProjectSimple] = Field(default_factory=list)
+    projects: list[ProjectSimple] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+class TagListItem(BaseModel):
+    id: int
+    slug: str
+    name: str
+    count: int
+
+class TagListResponse(BaseModel):
+    items: list[TagListItem]
+    limit: int
+    offset: int

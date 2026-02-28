@@ -6,7 +6,7 @@ from pydantic.generics import GenericModel
 
 T = TypeVar("T")
 
-class APIResponse(GenericModel, Generic[T]):
+class ApiResponse(GenericModel, Generic[T]):
     data: T
     meta: Optional[PaginationMeta] = None
     message: str = "Success"

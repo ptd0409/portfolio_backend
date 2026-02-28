@@ -1,6 +1,7 @@
 from app.db.base import Base
 from sqlalchemy import Column, Integer, String, DateTime, func
 from sqlalchemy.orm import relationship
+from app.models.project_tag import project_tag
 
 class Project(Base):
     __tablename__ = "project"
@@ -14,4 +15,4 @@ class Project(Base):
     published_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, onupdate=func.now())
-    tags = relationship("Tag", secondary="project_tag", back_populates="projects")
+    tags = relationship("Tag", secondary=project_tag, back_populates="projects")

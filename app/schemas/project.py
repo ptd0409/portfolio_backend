@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
+
+class TagSimple(BaseModel):
+    id: int
+    slug: str
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 class ProjectSimple(BaseModel):
     id: int
@@ -11,7 +19,23 @@ class ProjectSimple(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class ProjectListItem(BaseModel):
+    id: int
+    slug: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    published_at: Optional[datetime] = None
+
+    tags: list[TagSimple] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
 class ProjectRead(BaseModel):
+    id: int
+    slug: str
+    title: Optional[str] = None
+
     description: Optional[str] = None
     content: Optional[str] = None
     cover_image_url: Optional[str] = None
@@ -19,14 +43,8 @@ class ProjectRead(BaseModel):
     published_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
     tags: list[TagSimple] = Field(default_factory=list)
-
-    model_config = ConfigDict(from_attributes=True)
-
-class TagSimple(BaseModel):
-    id: int
-    slug: str
-    name: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -46,3 +64,6 @@ class ProjectUpdate(BaseModel):
     cover_image_url: Optional[str] = None
     repo_url: Optional[str] = None
     published_at: Optional[datetime] = None
+    tags: Optional[list[str]] = None
+
+    model_config = ConfigDict(extra="forbid")

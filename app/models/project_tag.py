@@ -1,7 +1,9 @@
 from app.db.base import Base
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Table, Column, Integer, ForeignKey
 
-class ProjectTag(Base):
-    __tablename__ = "project_tag"
-    project_id = Column(Integer, ForeignKey("project.id"), primary_key=True)
-    tag_id = Column(Integer, ForeignKey("tag.id"), primary_key=True)
+project_tag = Table(
+    "project_tag",
+    Base.metadata,
+    Column("project_id", Integer, ForeignKey("project.id"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tag.id"), primary_key=True)
+)
