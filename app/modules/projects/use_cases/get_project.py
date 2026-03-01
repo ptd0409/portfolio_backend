@@ -15,4 +15,4 @@ class GetProjectUseCase:
         self.repo = repo
 
     async def execute(self, data: GetProjectInput) -> Optional[Project]:
-        return await self.repo.get_by_slug(slug=data.slug, with_tags=True)
+        return await self.repo.get_by_slug(slug=data.slug, with_tags=True, published_only=True)

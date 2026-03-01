@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     DATABASE_URL_ASYNC: str
     DATABASE_URL_SYNC: str
+    ADMIN_API_KEY: str = Field(default="change-me")
     JWT_SECRET_KEY: str = "lwxSl-Nvc3pO7lRzznrBV9qf9aiHs4Q4yKSIpftttUBsEehDytLHECpA7GbK8BVHNYmPxts9MhAONXvWqIxcaQ"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24

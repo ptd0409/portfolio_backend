@@ -10,9 +10,11 @@ class ProjectRepoPort(Protocol):
         self,
         *,
         q: Optional[str],
+        tag: Optional[str],
         page: int,
         limit: int,
-        with_tags: bool = True
+        with_tags: bool = True,
+        published_only: bool = False
     ) -> tuple[list[Project], int]:
         ...
 
@@ -20,7 +22,8 @@ class ProjectRepoPort(Protocol):
         self,
         *,
         slug: str,
-        with_tags: bool = True
+        with_tags: bool = True,
+        published_only: bool = False
     ) -> Optional[Project]:
         ...
     

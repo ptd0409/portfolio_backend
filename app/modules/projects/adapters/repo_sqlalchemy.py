@@ -14,6 +14,8 @@ from app.modules.projects.ports import ProjectRepoPort
 from app.models.tag import Tag
 from app.modules.projects.utils import normalize_tag_slugs
 
+from app.models.project_tag import project_tag
+
 class SqlAlchemyProjectRepo(ProjectRepoPort):
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -27,14 +29,27 @@ class SqlAlchemyProjectRepo(ProjectRepoPort):
         self,
         *,
         q: Optional[str],
+        tag: Optional[str],
         page: int,
         limit: int,
-        with_tags: bool = True
+        with_tags: bool = True,
+        published_only: bool = False
     ) -> tuple[list[Project], int]:
         stmt: Select = select(Project)
 
+        if published_only:
+            stmt = stmt.where(Project.published_at.is_not(None))
+
         if with_tags:
             stmt = stmt.options(selectinload(Project.tags))
+
+        if tag:
+            t = tag.strip().lower()
+            stmt = (
+                stmt.join(project_tag, project_tag.c.project_id == Project.id)
+                    .join(Tag, Tag.id == project_tag.c.tag_id)
+                    .where(Tag.slug == t)
+            )
 
         if q:
             pattern = f"%{q.strip()}%"
@@ -60,16 +75,19 @@ class SqlAlchemyProjectRepo(ProjectRepoPort):
 
         stmt = stmt.offset(offset).limit(safe_limit)
 
-        rows: Sequence[Project] = (await self.db.execute(stmt)).scalars().all()
+        rows: Sequence[Project] = (await self.db.execute(stmt)).scalars().unique().all()
         return list(rows), int(total)
 
     async def get_by_slug(
         self,
         *,
         slug: str,
-        with_tags: bool = True
+        with_tags: bool = True,
+        published_only: bool = False
     ) -> Optional[Project]:
         stmt = select(Project).where(Project.slug == slug)
+        if published_only:
+            stmt = stmt.where(Project.published_at.is_not(None))
         if with_tags:
             stmt = stmt.options(selectinload(Project.tags))
         return (await self.db.execute(stmt)).scalar_one_or_none()
@@ -150,3 +168,17 @@ class SqlAlchemyProjectRepo(ProjectRepoPort):
 
         await self.db.refresh(project)
         return await self.get_by_slug(slug=slug, with_tags=True)
+    
+    async def delete_by_slug(self, slug: str) -> bool:
+        project = await self.get_by_slug(slug=slug, with_tags=False)
+        if not project:
+            return False
+        
+        await self.db.delete(project)
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise
+
+        return True
