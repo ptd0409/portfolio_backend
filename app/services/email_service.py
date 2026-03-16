@@ -151,3 +151,16 @@ async def send_verify_email(to_email: str, verify_link: str) -> None:
 
     html = _wrap_email_layout(subject, content_html)
     await send_email(to_email, subject, html, text)
+
+async def send_contact_notification(name: str, email: str, message: str) -> None:
+    subject = f"New contact form submission from {name}"
+
+    html = f"""
+    <h2>New Contact Message</h2>
+    <p><strong>Name:</strong> {escape(name)}</p>
+    <p><strong>Email:</strong> {escape(email)}</p>
+    <p><strong>Message:</strong></p>
+    <div style="white-space: pre-wrap;">{escape(message)}</div>
+    """
+
+    await send_email(settings.CONTACT_RECEIVER_EMAIL, subject, html)
