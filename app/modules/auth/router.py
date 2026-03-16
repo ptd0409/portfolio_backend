@@ -65,21 +65,14 @@ async def register(
         password_hash=hash_password(payload.password),
         role="admin",
         is_active=True,
-        is_verified=False,
+        is_verified=True,
         failed_login_attempts=0,
     )
     session.add(user)
     await session.commit()
 
-    try:
-        verify_token = create_verify_email_token(payload.email)
-        verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
-        await send_verify_email(payload.email, verify_link)
-    except Exception:
-        pass
-
     return MessageResponse(
-        message="Registration successful. Please check your email to verify your account"
+        message="Admin account created successfully. You can now log in."
     )
 
 
