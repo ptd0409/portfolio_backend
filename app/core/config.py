@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
     CORS_ORIGINS: List[str]
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env.local",".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=True
@@ -39,12 +39,7 @@ class Settings(BaseSettings):
 
     CONTACT_RECEIVER_EMAIL: str
 
-    REDIS_URL: str = "redis://localhost:6379/0"
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        extra="ignore"
-    )
+    REDIS_URL: str | None = None
 
     # Helpers
     @property
