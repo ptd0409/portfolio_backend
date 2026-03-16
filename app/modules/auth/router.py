@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,6 +56,7 @@ async def send_reset_password_email_safe(email: str, reset_link: str) -> None:
 @limiter.limit("3/10minutes")
 async def register(
     request: Request,
+    response: Response,
     payload: RegisterRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -118,6 +119,7 @@ async def register(
 @limiter.limit("3/10minutes")
 async def resend_verification(
     request: Request,
+    response: Response,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -141,6 +143,7 @@ async def resend_verification(
 @limiter.limit("10/10minutes")
 async def verify_email(
     request: Request,
+    response: Response,
     payload: VerifyEmailRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -187,6 +190,7 @@ async def verify_email(
 @limiter.limit("5/minute")
 async def login(
     request: Request,
+    response: Response,
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -260,6 +264,7 @@ async def login(
 @limiter.limit("10/minute")
 async def refresh_access_token(
     request: Request,
+    response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -322,6 +327,7 @@ async def refresh_access_token(
 @limiter.limit("20/minute")
 async def logout(
     request: Request,
+    response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -343,6 +349,7 @@ async def logout(
 @limiter.limit("30/minute")
 async def me(
     request: Request,
+    response: Response,
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -396,6 +403,7 @@ async def me(
 @limiter.limit("3/10minutes")
 async def forgot_password(
     request: Request,
+    response: Response,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -419,6 +427,7 @@ async def forgot_password(
 @limiter.limit("5/10minutes")
 async def reset_password(
     request: Request,
+    response: Response,
     payload: ResetPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
