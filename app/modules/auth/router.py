@@ -1,23 +1,21 @@
+import logging
 from datetime import datetime, timezone, timedelta
 
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    Header,
+    Request,
+    Response,
+    BackgroundTasks,
+)
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Request, Response
 
-from app.db.session import get_async_session
-from app.models.user import User
-from app.models.refresh_token import RefreshToken
-from app.schemas.auth import (
-    ForgotPasswordRequest,
-    LoginRequest,
-    MessageResponse,
-    RegisterRequest,
-    ResetPasswordRequest,
-    TokenResponse,
-    VerifyEmailRequest,
-    RefreshTokenRequest,
-    MeResponse,
-)
+from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     create_reset_token,
@@ -26,16 +24,44 @@ from app.core.security import (
     decode_token,
     hash_password,
     verify_password,
-    hash_refresh_token
+    hash_refresh_token,
+)
+from app.db.session import get_async_session
+from app.models.refresh_token import RefreshToken
+from app.models.user import User
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    MeResponse,
+    MessageResponse,
+    RefreshTokenRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    VerifyEmailRequest,
 )
 from app.services.email_service import (
     send_reset_password_email,
     send_verify_email,
 )
-from app.core.config import settings
-from app.core.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+async def send_verify_email_safe(email: str, verify_link: str):
+    try:
+        await send_verify_email(email, verify_link)
+    except Exception:
+        logger.exception("Failed to send verification email to %s", email)
+
+
+async def send_reset_password_email_safe(email: str, reset_link: str):
+    try:
+        await send_reset_password_email(email, reset_link)
+    except Exception:
+        logger.exception("Failed to send reset password email to %s", email)
 
 
 @router.post("/register", response_model=MessageResponse, status_code=201)
@@ -44,25 +70,49 @@ async def register(
     request: Request,
     response: Response,
     payload: RegisterRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
 ):
-    count_result = await session.execute(select(func.count()).select_from(User))
-    user_count = count_result.scalar_one()
+    email = payload.email.strip().lower()
 
-    if user_count > 0:
+    # Chỉ khóa public registration khi đã có admin verified
+    verified_admin_count_result = await session.execute(
+        select(func.count()).select_from(User).where(
+            User.role == "admin",
+            User.is_verified.is_(True),
+        )
+    )
+    verified_admin_count = verified_admin_count_result.scalar_one()
+
+    result = await session.execute(select(User).where(User.email == email))
+    existing_user = result.scalar_one_or_none()
+
+    # Nếu email đã tồn tại
+    if existing_user:
+        if existing_user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered",
+            )
+
+        # Account đã tồn tại nhưng chưa verify -> gửi lại email xác minh
+        verify_token = create_verify_email_token(email)
+        verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
+        background_tasks.add_task(send_verify_email_safe, email, verify_link)
+
+        return MessageResponse(
+            message="Account already exists but is not verified. A verification email has been resent."
+        )
+
+    # Nếu đã có admin verified -> khóa public registration
+    if verified_admin_count > 0:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Public registration is disabled",
         )
 
-    result = await session.execute(select(User).where(User.email == payload.email))
-    existing_user = result.scalar_one_or_none()
-
-    if existing_user:
-        raise HTTPException(status_code=409, detail="Email already registered")
-
     user = User(
-        email=payload.email,
+        email=email,
         password_hash=hash_password(payload.password),
         role="admin",
         is_active=True,
@@ -72,15 +122,36 @@ async def register(
     session.add(user)
     await session.commit()
 
-    try:
-        verify_token = create_verify_email_token(payload.email)
-        verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
-        await send_verify_email(payload.email, verify_link)
-    except Exception:
-        pass
+    verify_token = create_verify_email_token(email)
+    verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
+    background_tasks.add_task(send_verify_email_safe, email, verify_link)
 
     return MessageResponse(
-        message="Registration successful. Please check your email to verify your account"
+        message="Registration successful. Please check your email to verify your account."
+    )
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+@limiter.limit("3/10minutes")
+async def resend_verification(
+    request: Request,
+    response: Response,
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_async_session),
+):
+    email = payload.email.strip().lower()
+
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user and not user.is_verified:
+        verify_token = create_verify_email_token(email)
+        verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
+        background_tasks.add_task(send_verify_email_safe, email, verify_link)
+
+    return MessageResponse(
+        message="If the account exists and is not verified, a verification email has been sent."
     )
 
 
@@ -95,20 +166,32 @@ async def verify_email(
     try:
         token_payload = decode_token(payload.token)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
 
     if token_payload.get("type") != "verify_email":
-        raise HTTPException(status_code=400, detail="Invalid verification token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification token",
+        )
 
     email = token_payload.get("sub")
     if not email:
-        raise HTTPException(status_code=400, detail="Invalid verification token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification token",
+        )
 
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
 
     if user.is_verified:
         return MessageResponse(message="Email is already verified")
@@ -127,7 +210,9 @@ async def login(
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
-    result = await session.execute(select(User).where(User.email == payload.email))
+    email = payload.email.strip().lower()
+
+    result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -179,7 +264,8 @@ async def login(
     refresh_token = RefreshToken(
         user_id=user.id,
         token_hash=refresh_token_hashed,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_EXPIRE_DAYS),
+        expires_at=datetime.now(timezone.utc)
+        + timedelta(days=settings.JWT_REFRESH_EXPIRE_DAYS),
     )
     session.add(refresh_token)
 
@@ -199,23 +285,39 @@ async def refresh_access_token(
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
-    select(RefreshToken).where(RefreshToken.token == payload.refresh_token)
+    incoming_token_hash = hash_refresh_token(payload.refresh_token)
+
+    result = await session.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == incoming_token_hash)
+    )
     stored_token = result.scalar_one_or_none()
 
     if not stored_token:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
 
     if stored_token.revoked_at is not None:
-        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
 
     if stored_token.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Refresh token has expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired",
+        )
 
     result = await session.execute(select(User).where(User.id == stored_token.user_id))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="User is inactive or not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User is inactive or not found",
+        )
 
     access_token = create_access_token(subject=user.email, role=user.role)
     new_refresh_token_value = create_refresh_token()
@@ -226,7 +328,8 @@ async def refresh_access_token(
     new_refresh_token = RefreshToken(
         user_id=user.id,
         token_hash=new_refresh_token_hash,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_EXPIRE_DAYS),
+        expires_at=datetime.now(timezone.utc)
+        + timedelta(days=settings.JWT_REFRESH_EXPIRE_DAYS),
     )
     session.add(new_refresh_token)
     await session.commit()
@@ -268,27 +371,42 @@ async def me(
     session: AsyncSession = Depends(get_async_session),
 ):
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing access token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing access token",
+        )
 
     token = authorization.replace("Bearer ", "").strip()
 
     try:
         payload = decode_token(token)
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired access token",
+        )
 
     if payload.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Invalid token type")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type",
+        )
 
     email = payload.get("sub")
     if not email:
-        raise HTTPException(status_code=401, detail="Invalid access token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access token",
+        )
 
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
 
     return MeResponse(
         email=user.email,
@@ -297,25 +415,30 @@ async def me(
         is_active=user.is_active,
     )
 
+
 @router.post("/forgot-password", response_model=MessageResponse)
 @limiter.limit("3/10minutes")
 async def forgot_password(
     request: Request,
     response: Response,
     payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
 ):
-    result = await session.execute(select(User).where(User.email == payload.email))
+    email = payload.email.strip().lower()
+
+    result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if user:
         token = create_reset_token(user.email)
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-        await send_reset_password_email(user.email, reset_link)
+        background_tasks.add_task(send_reset_password_email_safe, user.email, reset_link)
 
     return MessageResponse(
         message="If this email exists, a password reset link has been sent"
     )
+
 
 @router.post("/reset-password", response_model=MessageResponse)
 @limiter.limit("5/10minutes")
@@ -328,20 +451,32 @@ async def reset_password(
     try:
         token_payload = decode_token(payload.token)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
 
     if token_payload.get("type") != "reset":
-        raise HTTPException(status_code=400, detail="Invalid reset token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset token",
+        )
 
     email = token_payload.get("sub")
     if not email:
-        raise HTTPException(status_code=400, detail="Invalid reset token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset token",
+        )
 
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
 
     user.password_hash = hash_password(payload.new_password)
 
@@ -355,6 +490,10 @@ async def reset_password(
 
     for token_row in active_tokens:
         token_row.revoked_at = datetime.now(timezone.utc)
+
+    # reset lock state luôn cho hợp lý
+    user.failed_login_attempts = 0
+    user.locked_until = None
 
     await session.commit()
 
