@@ -5,11 +5,6 @@ from typing import List
 class Settings(BaseSettings):
     APP_NAME: str = "portfolio"
     APP_ENV: str = "production"
-    POSTGRES_DB: str
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
     DEBUG: bool = False
     DATABASE_URL_ASYNC: str
     DATABASE_URL_SYNC: str
