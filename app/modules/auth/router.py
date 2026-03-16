@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request, Response
 
 from app.db.session import get_async_session
 from app.models.user import User
@@ -42,6 +42,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @limiter.limit("3/10minutes")
 async def register(
     request: Request,
+    response: Response,
     payload: RegisterRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -87,6 +88,7 @@ async def register(
 @limiter.limit("10/10minutes")
 async def verify_email(
     request: Request,
+    response: Response,
     payload: VerifyEmailRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -121,6 +123,7 @@ async def verify_email(
 @limiter.limit("5/minute")
 async def login(
     request: Request,
+    response: Response,
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -192,6 +195,7 @@ async def login(
 @limiter.limit("10/minute")
 async def refresh_access_token(
     request: Request,
+    response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -237,6 +241,7 @@ async def refresh_access_token(
 @limiter.limit("20/minute")
 async def logout(
     request: Request,
+    response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -258,6 +263,7 @@ async def logout(
 @limiter.limit("30/minute")
 async def me(
     request: Request,
+    response: Response,
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -295,6 +301,7 @@ async def me(
 @limiter.limit("3/10minutes")
 async def forgot_password(
     request: Request,
+    response: Response,
     payload: ForgotPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -314,6 +321,7 @@ async def forgot_password(
 @limiter.limit("5/10minutes")
 async def reset_password(
     request: Request,
+    response: Response,
     payload: ResetPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
