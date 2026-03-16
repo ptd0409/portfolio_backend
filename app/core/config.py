@@ -3,7 +3,7 @@ from pydantic import Field, field_validator
 
 class Settings(BaseSettings):
     APP_NAME: str = "portfolio"
-    APP_ENV: str = "local"
+    APP_ENV: str = "production"
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
