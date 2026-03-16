@@ -129,8 +129,8 @@ async def login(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found",
         )
 
     if not user.is_active:
@@ -162,7 +162,7 @@ async def login(
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Incorrect password",
         )
 
     user.failed_login_attempts = 0
