@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
+from typing import List
 
 class Settings(BaseSettings):
     APP_NAME: str = "portfolio"
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_EXPIRE_DAYS: int = 7
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
-    CORS_ORIGINS: str
+    CORS_ORIGINS: List[str]
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
