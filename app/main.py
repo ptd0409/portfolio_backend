@@ -23,8 +23,9 @@ async def health():
 app.include_router(v1_router, prefix="/api/v1")
 
 origins = [
+    "https://blooperry.com",
+    "https://www.blooperry.com",
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
