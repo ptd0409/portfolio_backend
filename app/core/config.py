@@ -21,13 +21,9 @@ class Settings(BaseSettings):
         case_sensitive=True
     )
 
-    SMTP_HOST: str
-    SMTP_PORT: int = 587
-    SMTP_USERNAME: str
-    SMTP_PASSWORD: str
-    SMTP_FROM_EMAIL: str
-    SMTP_USE_TLS: bool = True
-    SMTP_FROM_NAME: str = "Portfolio Admin"
+    EMAIL_PROVIDER: str = "resend"
+    RESEND_API_KEY: str | None = None
+    EMAIL_FROM: str
 
     FRONTEND_URL: str
     VERIFY_EMAIL_TOKEN_EXPIRE_MINUTES: int = 60

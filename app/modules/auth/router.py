@@ -1,30 +1,21 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    status,
-    Header,
-    Request,
-    Response,
-    BackgroundTasks,
-)
-from sqlalchemy import select, func
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
+    create_refresh_token,
     create_reset_token,
     create_verify_email_token,
-    create_refresh_token,
     decode_token,
     hash_password,
-    verify_password,
     hash_refresh_token,
+    verify_password,
 )
 from app.db.session import get_async_session
 from app.models.refresh_token import RefreshToken
@@ -40,42 +31,37 @@ from app.schemas.auth import (
     TokenResponse,
     VerifyEmailRequest,
 )
-from app.services.email_service import (
-    send_reset_password_email,
-    send_verify_email,
-)
+from app.services.email_service import send_reset_password_email, send_verify_email
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-async def send_verify_email_safe(email: str, verify_link: str):
+async def send_verify_email_safe(email: str, verify_link: str) -> None:
     try:
         await send_verify_email(email, verify_link)
     except Exception:
         logger.exception("Failed to send verification email to %s", email)
 
 
-async def send_reset_password_email_safe(email: str, reset_link: str):
+async def send_reset_password_email_safe(email: str, reset_link: str) -> None:
     try:
         await send_reset_password_email(email, reset_link)
     except Exception:
         logger.exception("Failed to send reset password email to %s", email)
 
 
-@router.post("/register", response_model=MessageResponse, status_code=201)
+@router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/10minutes")
 async def register(
     request: Request,
-    response: Response,
     payload: RegisterRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
 ):
     email = payload.email.strip().lower()
 
-    # Chỉ khóa public registration khi đã có admin verified
     verified_admin_count_result = await session.execute(
         select(func.count()).select_from(User).where(
             User.role == "admin",
@@ -87,7 +73,6 @@ async def register(
     result = await session.execute(select(User).where(User.email == email))
     existing_user = result.scalar_one_or_none()
 
-    # Nếu email đã tồn tại
     if existing_user:
         if existing_user.is_verified:
             raise HTTPException(
@@ -95,7 +80,6 @@ async def register(
                 detail="Email already registered",
             )
 
-        # Account đã tồn tại nhưng chưa verify -> gửi lại email xác minh
         verify_token = create_verify_email_token(email)
         verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
         background_tasks.add_task(send_verify_email_safe, email, verify_link)
@@ -104,7 +88,6 @@ async def register(
             message="Account already exists but is not verified. A verification email has been resent."
         )
 
-    # Nếu đã có admin verified -> khóa public registration
     if verified_admin_count > 0:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -135,7 +118,6 @@ async def register(
 @limiter.limit("3/10minutes")
 async def resend_verification(
     request: Request,
-    response: Response,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -145,7 +127,7 @@ async def resend_verification(
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    if user and not user.is_verified:
+    if user and not user.is_verified and user.is_active:
         verify_token = create_verify_email_token(email)
         verify_link = f"{settings.FRONTEND_URL}/verify-email?token={verify_token}"
         background_tasks.add_task(send_verify_email_safe, email, verify_link)
@@ -159,7 +141,6 @@ async def resend_verification(
 @limiter.limit("10/10minutes")
 async def verify_email(
     request: Request,
-    response: Response,
     payload: VerifyEmailRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -206,7 +187,6 @@ async def verify_email(
 @limiter.limit("5/minute")
 async def login(
     request: Request,
-    response: Response,
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -217,8 +197,8 @@ async def login(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
         )
 
     if not user.is_active:
@@ -250,7 +230,7 @@ async def login(
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password",
+            detail="Invalid email or password",
         )
 
     user.failed_login_attempts = 0
@@ -268,7 +248,6 @@ async def login(
         + timedelta(days=settings.JWT_REFRESH_EXPIRE_DAYS),
     )
     session.add(refresh_token)
-
     await session.commit()
 
     return TokenResponse(
@@ -281,7 +260,6 @@ async def login(
 @limiter.limit("10/minute")
 async def refresh_access_token(
     request: Request,
-    response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -344,7 +322,6 @@ async def refresh_access_token(
 @limiter.limit("20/minute")
 async def logout(
     request: Request,
-    response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -366,7 +343,6 @@ async def logout(
 @limiter.limit("30/minute")
 async def me(
     request: Request,
-    response: Response,
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -420,7 +396,6 @@ async def me(
 @limiter.limit("3/10minutes")
 async def forgot_password(
     request: Request,
-    response: Response,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -430,7 +405,7 @@ async def forgot_password(
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    if user:
+    if user and user.is_verified and user.is_active:
         token = create_reset_token(user.email)
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         background_tasks.add_task(send_reset_password_email_safe, user.email, reset_link)
@@ -444,7 +419,6 @@ async def forgot_password(
 @limiter.limit("5/10minutes")
 async def reset_password(
     request: Request,
-    response: Response,
     payload: ResetPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -488,10 +462,10 @@ async def reset_password(
     )
     active_tokens = result.scalars().all()
 
+    now = datetime.now(timezone.utc)
     for token_row in active_tokens:
-        token_row.revoked_at = datetime.now(timezone.utc)
+        token_row.revoked_at = now
 
-    # reset lock state luôn cho hợp lý
     user.failed_login_attempts = 0
     user.locked_until = None
 
