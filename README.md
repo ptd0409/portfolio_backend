@@ -1,6 +1,6 @@
 ## Generate JWT secret key
 
-python -c "import secrets; print(secrets.token_urlsafe(64))"
+openssl rand -hex 32
 
 ## Create migration init
 

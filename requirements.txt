@@ -8,5 +8,11 @@ pydantic==2.12.5
 pydantic-settings==2.13.1
 alembic==1.18.3
 python-jose[cryptography]
-passlib[bcrypt]
+passlib==1.7.4
+bcrypt==4.0.1
 python-multipart
+pydantic[email]
+PyJWT==2.12.1
+aiosmtplib==5.1.0
+redis==7.3.0
+slowapi==0.1.9
