@@ -41,6 +41,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=MessageResponse, status_code=201)
 @limiter.limit("3/10minutes")
 async def register(
+    request: Request,
     payload: RegisterRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -85,6 +86,7 @@ async def register(
 @router.post("/verify-email", response_model=MessageResponse)
 @limiter.limit("10/10minutes")
 async def verify_email(
+    request: Request,
     payload: VerifyEmailRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -118,6 +120,7 @@ async def verify_email(
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(
+    request: Request,
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -188,6 +191,7 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def refresh_access_token(
+    request: Request,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -232,6 +236,7 @@ async def refresh_access_token(
 @router.post("/logout", response_model=MessageResponse)
 @limiter.limit("20/minute")
 async def logout(
+    request: Request,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -252,6 +257,7 @@ async def logout(
 @router.get("/me", response_model=MeResponse)
 @limiter.limit("30/minute")
 async def me(
+    request: Request,
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -288,6 +294,7 @@ async def me(
 @router.post("/forgot-password", response_model=MessageResponse)
 @limiter.limit("3/10minutes")
 async def forgot_password(
+    request: Request,
     payload: ForgotPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -306,6 +313,7 @@ async def forgot_password(
 @router.post("/reset-password", response_model=MessageResponse)
 @limiter.limit("5/10minutes")
 async def reset_password(
+    request: Request,
     payload: ResetPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
