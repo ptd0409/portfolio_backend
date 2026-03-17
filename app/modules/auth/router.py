@@ -1,12 +1,12 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.rate_limit import limiter
+#from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -53,10 +53,10 @@ async def send_reset_password_email_safe(email: str, reset_link: str) -> None:
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("3/10minutes")
+#@limiter.limit("3/10minutes")
 async def register(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: RegisterRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -116,10 +116,10 @@ async def register(
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
-@limiter.limit("3/10minutes")
+#@limiter.limit("3/10minutes")
 async def resend_verification(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -140,10 +140,10 @@ async def resend_verification(
 
 
 @router.post("/verify-email", response_model=MessageResponse)
-@limiter.limit("10/10minutes")
+#@limiter.limit("10/10minutes")
 async def verify_email(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: VerifyEmailRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -187,10 +187,10 @@ async def verify_email(
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+#@limiter.limit("5/minute")
 async def login(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: LoginRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -261,10 +261,10 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-@limiter.limit("10/minute")
+#@limiter.limit("10/minute")
 async def refresh_access_token(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -324,10 +324,10 @@ async def refresh_access_token(
 
 
 @router.post("/logout", response_model=MessageResponse)
-@limiter.limit("20/minute")
+#@limiter.limit("20/minute")
 async def logout(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: RefreshTokenRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -346,10 +346,10 @@ async def logout(
 
 
 @router.get("/me", response_model=MeResponse)
-@limiter.limit("30/minute")
+#@limiter.limit("30/minute")
 async def me(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     authorization: str | None = Header(default=None),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -400,10 +400,10 @@ async def me(
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
-@limiter.limit("3/10minutes")
+#@limiter.limit("3/10minutes")
 async def forgot_password(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
@@ -424,10 +424,10 @@ async def forgot_password(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
-@limiter.limit("5/10minutes")
+#@limiter.limit("5/10minutes")
 async def reset_password(
-    request: Request,
-    response: Response,
+    #request: Request,
+    #response: Response,
     payload: ResetPasswordRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
